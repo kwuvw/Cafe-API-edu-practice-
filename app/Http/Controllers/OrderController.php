@@ -7,7 +7,8 @@ use App\Models\Order;
 use App\Models\WorkShift;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
-
+use App\Http\Requests\AddRequest;
+use App\Http\Resources\OrderResource;
 
 class OrderController extends Controller
 {
@@ -36,34 +37,30 @@ class OrderController extends Controller
     }
 
 
-    public function store(Request $request)
+    public function store(AddRequest $request)
     {
-        $request->validate([
-            'table_id' => 'required|exists:tables,id',
-            'number_of_person' => 'required|integer|min:1',
-        ]);
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        $shiftWorker = DB::table('shift_workers')
-            ->join('work_shifts', 'shift_workers.work_shift_id', '=', 'work_shifts.id')
-            ->where('shift_workers.user_id', $user->id)
-            ->where('work_shifts.active', 1)
-            ->select('shift_workers.id')
+        $activeShiftWorker = $user->shiftWorkers()
+            ->whereHas('workShift', function ($q) {
+                $q->where('active', 1);
+            })
             ->first();
 
-        if (!$shiftWorker) {
-            return response()->json(['message' => 'Вы не на активной смене'], 403);
+        if (!$activeShiftWorker) {
+            return response()->json(['error' => 'У вас нет активной рабочей смены'], 403);
         }
 
         $order = Order::create([
             'table_id' => $request->table_id,
             'number_of_person' => $request->number_of_person,
-            'shift_worker_id' => $shiftWorker->id,
-            'status_order_id' => 1,
+            'status_order_id' => 1, // Статус "Принят"
+            'shift_worker_id' => $activeShiftWorker->id,
         ]);
 
-        return response()->json($order, 201);
+        return new OrderResource($order);
     }
 
     public function show($id)

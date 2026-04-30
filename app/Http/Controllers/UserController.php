@@ -2,53 +2,35 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\User;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\UserLoginRequest;
+use App\Http\Requests\UserAddRequest;
+use App\Http\Resources\UserResource;
 
 class UserController extends Controller
 {
-    public function login(Request $request)
+    public function login(UserLoginRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'login' => 'required|string',
-            'password' => 'required|string',
-        ]);
+        $credentials = $request->only('login', 'password');
 
-        if ($validator->fails()) {
+        if (!Auth::attempt($credentials)) {
             return response()->json([
                 'error' => [
-                    'code' => 422,
-                    'message' => 'validation error',
-                    'errors' => $validator->errors()
+                    'code' => 401,
+                    'message' => 'Authentication failed'
                 ]
-            ], 422);
-        }
-
-        $user = User::where('login', trim($request->login))->first();
-
-        if (!$user || $request->password !== $user->password) {
-            return response()->json([
-                'message' => 'Неверный логин или пароль'
             ], 401);
         }
 
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+
         $token = $user->createToken('api-token')->plainTextToken;
 
-
-        return response()->json([
-            'token' => $token,
-            'role' => $user->role_id
-        ]);
-    }
-
-    public function logout(Request $request)
-    {
-        $request->user()->currentAccessToken()->delete();
-
-        return response()->json([
-            'message' => 'Успешный выход'
-        ]);
+        return response()->json(['data' => ['token' => $token]]);
     }
 
     public function index(Request $request)
@@ -63,31 +45,11 @@ class UserController extends Controller
         }
 
         $users = User::all();
-        return response()->json([
-            'data' => $users
-        ], 200);
+        return UserResource::collection($users);
     }
 
-    public function store(Request $request)
+    public function store(UserAddRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string',
-            'surname' => 'required|string',
-            'patronymic' => 'nullable|string',
-            'login' => 'required|string|unique:users,login',
-            'password' => 'required|string',
-            'role_id' => 'required|integer',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'error' => [
-                    'code' => 422,
-                    'message' => 'Validation error',
-                    'errors' => $validator->errors()
-                ]
-            ], 422);
-        }
 
         $user = User::create([
             'name' => $request->name,
@@ -105,5 +67,14 @@ class UserController extends Controller
                 'message' => 'Сотрудник успешно добавлен'
             ]
         ], 201);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'message' => 'Успешный выход'
+        ]);
     }
 }

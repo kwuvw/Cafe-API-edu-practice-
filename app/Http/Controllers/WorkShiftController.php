@@ -3,52 +3,28 @@
 namespace App\Http\Controllers;
 
 use App\Models\WorkShift;
+use App\Http\Requests\WorkShiftRequest;
+use App\Http\Resources\WorkShiftResource;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-
 
 class WorkShiftController extends Controller
 {
     public function index()
     {
         $shifts = WorkShift::all();
-
-        return response()->json([
-            'data' => $shifts
-        ], 200);
+        return WorkShiftResource::collection($shifts);
     }
 
-    public function store(Request $request)
+    public function store(WorkShiftRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'start' => 'required|date_format:Y-m-d H:i:s',
-            'end'   => 'required|date_format:Y-m-d H:i:s|after:start',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'error' => [
-                    'code' => 422,
-                    'message' => 'Validation error',
-                    'errors' => $validator->errors()
-                ]
-            ], 422);
-        }
-
         $shift = WorkShift::create([
-            'start' => $request->start,
-            'end'   => $request->end,
+            'start'  => $request->start,
+            'end'    => $request->end,
             'active' => 0,
         ]);
 
-        return response()->json([
-            'id' => $shift->id,
-            'start' => $shift->start,
-            'end' => $shift->end,
-            'active' => $shift->active
-        ], 201);
+        return new WorkShiftResource($shift);
     }
-
 
     public function open($id)
     {
@@ -67,8 +43,7 @@ class WorkShiftController extends Controller
             return response()->json(['message' => 'Смена не найдена'], 404);
         }
 
-        $shift->active = 1;
-        $shift->save();
+        $shift->update(['active' => 1]);
 
         return response()->json([
             'data' => [
@@ -85,8 +60,7 @@ class WorkShiftController extends Controller
             return response()->json(['message' => 'Смена не найдена'], 404);
         }
 
-        $shift->active = 0;
-        $shift->save();
+        $shift->update(['active' => 0]);
 
         return response()->json([
             'data' => [

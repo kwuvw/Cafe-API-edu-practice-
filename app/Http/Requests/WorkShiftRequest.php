@@ -7,11 +7,16 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class WorkShiftRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        return true;
+    }
+
     public function rules(): array
     {
         return [
             'start' => 'required|date_format:Y-m-d H:i:s',
-            'end' => 'required|date_format:Y-m-d H:i:s|after:start',
+            'end'   => 'required|date_format:Y-m-d H:i:s|after:start',
         ];
     }
 }

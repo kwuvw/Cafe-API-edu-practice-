@@ -174,34 +174,6 @@ class OrderController extends Controller
     }
 
 
-    public function removeFromOrder($orderId, $menuId)
-    {
-        $order = Order::find($orderId);
-        if (!$order) {
-            return response()->json(['message' => 'Заказ не найден'], 404);
-        }
-
-
-        if (in_array($order->status_order_id, [4, 5])) {
-            return response()->json(['message' => 'Нельзя менять состав закрытого заказа'], 403);
-        }
-
-        $deleted = DB::table('order_menus')
-            ->where('order_id', $orderId)
-            ->where('menu_id', $menuId)
-            ->delete();
-
-        if (!$deleted) {
-            return response()->json(['message' => 'Эта позиция не найдена в заказе'], 404);
-        }
-
-        return response()->json([
-            'data' => [
-                'message' => 'Позиция успешно удалена из заказа'
-            ]
-        ]);
-    }
-
     public function updateStatusByCook(Request $request, $id)
     {
         $request->validate([

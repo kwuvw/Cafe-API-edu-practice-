@@ -20,7 +20,7 @@ class User extends Authenticatable
         'login',
         'password',
         'photo_file',
-        'role_id', 
+        'role_id',
         'status'
     ];
     protected $hidden = [
@@ -35,4 +35,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
         ];
     }
+
+    protected $casts = [
+        'password' => 'hashed', 
+    ];
 }

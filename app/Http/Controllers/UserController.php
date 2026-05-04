@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\UserLoginRequest;
 use App\Http\Requests\UserAddRequest;
 use App\Http\Resources\UserResource;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
@@ -53,10 +54,8 @@ class UserController extends Controller
 
         $user = User::create([
             'name' => $request->name,
-            'surname' => $request->surname,
-            'patronymic' => $request->patronymic,
             'login' => $request->login,
-            'password' => $request->password,
+            'password' => Hash::make($request->password),
             'role_id' => $request->role_id,
             'status' => 'working',
         ]);

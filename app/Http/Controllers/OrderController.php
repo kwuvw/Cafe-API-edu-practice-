@@ -56,7 +56,7 @@ class OrderController extends Controller
         $order = Order::create([
             'table_id' => $request->table_id,
             'number_of_person' => $request->number_of_person,
-            'status_order_id' => 1, // Статус "Принят"
+            'status_order_id' => 1, 
             'shift_worker_id' => $activeShiftWorker->id,
         ]);
 

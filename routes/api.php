@@ -26,7 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('waiter')->group(function () {
         Route::post('/order', [OrderController::class, 'store']);
-        Route::get('/order/{id}', [OrderController::class, 'show']); // Использует ShowRequest
+        Route::get('/order/{id}', [OrderController::class, 'show']);
         Route::post('/order/{order}/position', [PositionController::class, 'store']);
         Route::delete('/position/{id}', [PositionController::class, 'destroy']);
         Route::get('/shifts/{id}/orders', [OrderController::class, 'ordersByShift']);

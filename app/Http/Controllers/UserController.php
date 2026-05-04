@@ -53,11 +53,13 @@ class UserController extends Controller
     {
 
         $user = User::create([
-            'name' => $request->name,
-            'login' => $request->login,
-            'password' => Hash::make($request->password),
-            'role_id' => $request->role_id,
-            'status' => 'working',
+            'name'       => $request->name,
+            'surname'    => $request->surname,
+            'patronymic' => $request->patronymic,
+            'login'      => $request->login,
+            'password'   => \Illuminate\Support\Facades\Hash::make($request->password),
+            'role_id'    => $request->role_id,
+            'status'     => 'working',
         ]);
 
         return response()->json([

@@ -38,4 +38,6 @@ Route::prefix('api')->middleware('auth:sanctum')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::get('/orders/active', [OrderController::class, 'activeShiftOrders']);
     });
+
 });
+

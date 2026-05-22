@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [UserController::class, 'login']);
 
-Route::prefix('api')->middleware('auth:sanctum')->group(function () {
+Route::prefix('api-cafe')->middleware('auth:sanctum')->group(function () {
     Route::get('/logout', [UserController::class, 'logout']);
 
     Route::middleware('role:admin')->group(function () {

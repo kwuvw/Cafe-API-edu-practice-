@@ -2,44 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Order;
-use App\Models\WorkShift;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\AddRequest;
 use App\Http\Resources\OrderResource;
+use App\Models\Order;
+use App\Models\OrderMenu;
+use App\Models\StatusOrder;
+use App\Models\WorkShift;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
     public function ordersByShifts($id)
     {
-        $shift = WorkShift::find($id);
-        if (!$shift) {
-            return response()->json(['message' => 'Смена не найдена'], 404);
-        }
-
-        $workerIds = DB::table('shift_workers')
-            ->where('work_shift_id', $id)
-            ->pluck('id');
-
-        $orders = Order::whereIn('shift_worker_id', $workerIds)->get();
-
-        $totalCount = $orders->count();
-
-        return response()->json([
-            'data' => [
-                'id' => $id,
-                'orders_count' => $totalCount,
-                'orders' => $orders
-            ]
-        ], 200);
+        return $this->ordersByShift($id);
     }
-
 
     public function store(AddRequest $request)
     {
-
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
@@ -49,14 +30,14 @@ class OrderController extends Controller
             })
             ->first();
 
-        if (!$activeShiftWorker) {
+        if (! $activeShiftWorker) {
             return response()->json(['error' => 'У вас нет активной рабочей смены'], 403);
         }
 
         $order = Order::create([
             'table_id' => $request->table_id,
             'number_of_person' => $request->number_of_person,
-            'status_order_id' => 1, 
+            'status_order_id' => 1,
             'shift_worker_id' => $activeShiftWorker->id,
         ]);
 
@@ -68,91 +49,144 @@ class OrderController extends Controller
         $order = Order::with([
             'table',
             'status_order',
-            'shift_worker.user'
+            'shift_worker.user',
+            'orderMenus.menu',
         ])->find($id);
 
-        if (!$order) {
+        if (! $order) {
             return response()->json([
                 'error' => [
                     'code' => 404,
-                    'message' => 'Заказ не найден'
-                ]
+                    'message' => 'Заказ не найден',
+                ],
             ], 404);
         }
 
         return response()->json([
-            'data' => $order
+            'data' => $this->formatOrderDetails($order),
         ]);
     }
-
 
     public function ordersByShift($id)
     {
         $shift = WorkShift::find($id);
-        if (!$shift) {
+
+        if (! $shift) {
             return response()->json([
                 'error' => [
                     'code' => 404,
-                    'message' => 'Смена не найдена'
-                ]
+                    'message' => 'Смена не найдена',
+                ],
             ], 404);
         }
 
-        $orders = Order::whereHas('shift_worker', function ($query) use ($id) {
-            $query->where('work_shift_id', $id);
-        })
-            ->with(['table', 'status_order', 'shift_worker.user'])
+        $orders = Order::query()
+            ->whereHas('shift_worker', function ($query) use ($id) {
+                $query->where('work_shift_id', $id);
+            })
+            ->with(['table', 'status_order', 'shift_worker.user', 'items'])
             ->get();
 
+        $data = $orders->map(function (Order $order) {
+            $totalPrice = $order->items->sum(function ($item) {
+                return ((float) $item->price) * ((int) $item->pivot->count);
+            });
+
+            return [
+                'id' => $order->id,
+                'table_number' => $order->table?->number ?? $order->table?->name ?? $order->table_id,
+                'waiter_name' => $order->shift_worker?->user?->display_name,
+                'status' => $order->status_order?->name ?? $order->status_order_id,
+                'total_price' => round((float) $totalPrice, 2),
+            ];
+        })->values();
+
         return response()->json([
-            'data' => [
-                'id' => $shift->id,
-                'start' => $shift->start,
-                'end' => $shift->end,
-                'orders' => $orders,
-                'total_amount' => $orders->count()
-            ]
+            'data' => $data,
         ]);
     }
 
     public function updateStatus(Request $request, $id)
     {
-        $request->validate([
-            'status_id' => 'required|exists:status_orders,id'
+        $validated = $request->validate([
+            'status_id' => 'nullable|integer|exists:status_orders,id',
+            'send_to_kitchen' => 'sometimes|boolean',
         ]);
 
-        $order = Order::find($id);
+        $order = Order::with('status_order')->find($id);
 
-        if (!$order) {
+        if (! $order) {
             return response()->json([
                 'error' => [
                     'code' => 404,
-                    'message' => 'Заказ не найден'
-                ]
+                    'message' => 'Заказ не найден',
+                ],
             ], 404);
         }
 
-        $order->status_order_id = $request->status_id;
+        $statusId = $validated['status_id'] ?? null;
+
+        if (! $statusId && $request->boolean('send_to_kitchen')) {
+            $statusId = StatusOrder::PREPARING;
+        }
+
+        if (! $statusId) {
+            return response()->json([
+                'message' => 'The status id field is required.',
+                'errors' => [
+                    'status_id' => ['The status id field is required.'],
+                ],
+            ], 422);
+        }
+
+        $order->status_order_id = $statusId;
         $order->save();
+        $order->load('status_order');
 
         return response()->json([
             'data' => [
                 'id' => $order->id,
-                'status' => $order->status_order_id,
-                'message' => 'Статус заказа успешно обновлен'
-            ]
+                'status_id' => $order->status_order_id,
+                'status' => $order->status_order?->name,
+                'message' => 'Статус заказа успешно обновлен',
+            ],
         ]);
+    }
+
+    private function formatOrderDetails(Order $order): array
+    {
+        return [
+            'id' => $order->id,
+            'table_id' => $order->table_id,
+            'table' => $order->table,
+            'table_number' => $order->table?->number ?? $order->table?->name ?? $order->table_id,
+            'number_of_person' => $order->number_of_person,
+            'number_of_persons' => $order->number_of_person,
+            'status_order_id' => $order->status_order_id,
+            'status' => $order->status_order?->name,
+            'created_at' => $order->created_at,
+            'positions' => $order->orderMenus->map(function (OrderMenu $position) {
+                return [
+                    'id' => $position->id,
+                    'position_id' => $position->id,
+                    'menu_id' => $position->menu_id,
+                    'name' => $position->menu?->name,
+                    'item' => $position->menu?->name,
+                    'count' => $position->count,
+                ];
+            })->values(),
+        ];
     }
 
     public function addToOrder(Request $request, $id)
     {
         $request->validate([
             'menu_id' => 'required|exists:menus,id',
-            'count' => 'required|integer|min:1'
+            'count' => 'required|integer|min:1',
         ]);
 
         $order = Order::find($id);
-        if (!$order) {
+        if (! $order) {
             return response()->json(['message' => 'Заказ не найден'], 404);
         }
 
@@ -168,20 +202,19 @@ class OrderController extends Controller
 
         return response()->json([
             'data' => [
-                'message' => 'Блюдо добавлено в заказ'
-            ]
+                'message' => 'Блюдо добавлено в заказ',
+            ],
         ], 201);
     }
-
 
     public function updateStatusByCook(Request $request, $id)
     {
         $request->validate([
-            'status_id' => 'required|exists:status_orders,id'
+            'status_id' => 'required|exists:status_orders,id',
         ]);
 
         $order = Order::find($id);
-        if (!$order) {
+        if (! $order) {
             return response()->json(['message' => 'Заказ не найден'], 404);
         }
 
@@ -196,25 +229,73 @@ class OrderController extends Controller
             'data' => [
                 'id' => $order->id,
                 'status' => $order->status_order_id,
-                'message' => 'Статус заказа обновлен поваром'
-            ]
+                'message' => 'Статус заказа обновлен поваром',
+            ],
         ]);
+    }
+
+    public function index()
+    {
+        return $this->kitchenOrders();
     }
 
     public function activeShiftOrders()
     {
-        $activeShift = DB::table('work_shifts')->where('active', 1)->first();
+        return $this->kitchenOrders();
+    }
 
-        if (!$activeShift) {
-            return response()->json(['message' => 'Нет активных смен'], 404);
+    public function kitchenOrders()
+    {
+        $activeShift = WorkShift::query()
+            ->where('active', true)
+            ->first();
+
+        if (! $activeShift) {
+            return response()->json([
+                'message' => 'Нет активных смен',
+            ], 404);
         }
 
-        $orders = Order::whereHas('shift_worker', function ($query) use ($activeShift) {
-            $query->where('work_shift_id', $activeShift->id);
-        })
-            ->with(['table', 'status_order', 'items'])
+        $orders = Order::query()
+            ->where('status_order_id', StatusOrder::PREPARING)
+            ->whereHas('shift_worker', function ($query) use ($activeShift) {
+                $query->where('work_shift_id', $activeShift->id);
+            })
+            ->with(['table', 'status_order', 'orderMenus.menu'])
+            ->orderBy('created_at')
+            ->orderBy('id')
             ->get();
 
-        return response()->json(['data' => $orders]);
+        return response()->json([
+            'data' => [
+                'shift_id' => $activeShift->id,
+                'orders' => $orders
+                    ->map(fn (Order $order) => $this->formatKitchenOrder($order))
+                    ->values(),
+            ],
+        ]);
+    }
+
+    private function formatKitchenOrder(Order $order): array
+    {
+        return [
+            'id' => $order->id,
+            'status' => $order->status_order?->name,
+            'status_id' => $order->status_order_id,
+            'status_code' => $order->status_order?->code,
+            'table_id' => $order->table_id,
+            'table_number' => $order->table?->number ?? $order->table?->name ?? $order->table_id,
+            'table' => $order->table,
+            'created_at' => $order->created_at,
+            'positions' => $order->orderMenus->map(function (OrderMenu $position) {
+                return [
+                    'id' => $position->id,
+                    'menu_id' => $position->menu_id,
+                    'name' => $position->menu?->name,
+                    'item' => $position->menu?->name,
+                    'count' => $position->count,
+                ];
+            })->values(),
+        ];
     }
 }

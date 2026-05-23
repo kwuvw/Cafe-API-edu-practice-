@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
@@ -32,6 +33,11 @@ class Order extends Model
     public function items()
     {
         return $this->belongsToMany(Menu::class, 'order_menus', 'order_id', 'menu_id')
-            ->withPivot('count');
+            ->withPivot('id', 'count');
+    }
+
+    public function orderMenus(): HasMany
+    {
+        return $this->hasMany(OrderMenu::class, 'order_id');
     }
 }

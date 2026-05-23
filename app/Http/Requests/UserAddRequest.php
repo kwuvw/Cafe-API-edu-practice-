@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UserAddRequest extends FormRequest
@@ -11,11 +10,12 @@ class UserAddRequest extends FormRequest
     {
         return true;
     }
+
     public function rules(): array
     {
         return [
             'name' => 'required|string',
-            'surname' => 'required|string',
+            'surname' => 'nullable|string',
             'patronymic' => 'nullable|string',
             'login' => 'required|string|unique:users,login',
             'password' => 'required|string',

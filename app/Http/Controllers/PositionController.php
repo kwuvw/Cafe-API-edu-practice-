@@ -18,7 +18,7 @@ class PositionController extends Controller
             'count'    => $request->count,
         ]);
 
-        return new PositionResource($position);
+        return new PositionResource($position->load('menu'));
     }
 
     public function destroy($id)

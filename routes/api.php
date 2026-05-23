@@ -8,15 +8,18 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [UserController::class, 'login']);
 
-Route::prefix('api-cafe')->middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/logout', [UserController::class, 'logout']);
+
+    Route::get('/shifts', [WorkShiftController::class, 'index'])
+        ->middleware('role:admin,waiter');
 
     Route::middleware('role:admin')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
 
-        Route::get('/shifts', [WorkShiftController::class, 'index']);
         Route::post('/shifts', [WorkShiftController::class, 'store']);
+        Route::post('/shifts/{id}/users', [WorkShiftController::class, 'addUser']);
         Route::patch('/shifts/{id}/open', [WorkShiftController::class, 'open']);
         Route::patch('/shifts/{id}/close', [WorkShiftController::class, 'close']);
     });
@@ -38,6 +41,4 @@ Route::prefix('api-cafe')->middleware('auth:sanctum')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::get('/orders/active', [OrderController::class, 'activeShiftOrders']);
     });
-
 });
-

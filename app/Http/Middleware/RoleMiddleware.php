@@ -4,11 +4,16 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
-class EnsureUserHasRole
+class RoleMiddleware
 {
+    private const ROLE_MAP = [
+        'admin' => 1,
+        'waiter' => 2,
+        'cook' => 3,
+    ];
+
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
         $user = $request->user();
@@ -22,21 +27,25 @@ class EnsureUserHasRole
             ], 401);
         }
 
-        $roleName = null;
-
-        if (isset($user->role_id)) {
-            $roleName = DB::table('roles')
-                ->where('id', $user->role_id)
-                ->value('name');
-        }
-
-        $normalizedRole = is_string($roleName) ? strtolower(trim($roleName)) : null;
-        $allowedRoles = collect($roles)
+        $allowedRoleIds = collect($roles)
+            ->flatMap(fn (string $role) => explode(',', $role))
             ->map(fn (string $role) => strtolower(trim($role)))
             ->filter()
+            ->map(fn (string $role) => self::ROLE_MAP[$role] ?? null)
+            ->filter()
+            ->unique()
             ->values();
 
-        if ($normalizedRole !== null && $allowedRoles->contains($normalizedRole)) {
+        if ($allowedRoleIds->isEmpty()) {
+            return response()->json([
+                'error' => [
+                    'code' => 403,
+                    'message' => 'Forbidden for you',
+                ],
+            ], 403);
+        }
+
+        if ($allowedRoleIds->contains((int) $user->role_id)) {
             return $next($request);
         }
 
